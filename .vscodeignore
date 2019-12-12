@@ -1,3 +1,5 @@
+**/*.ts
+**/tsconfig.json
 .vscode/**
 .vscode-test/**
 out/test/**
