@@ -63,7 +63,8 @@
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
         "preinstall": "node ./scripts/preinstall.js",
-        "test": "node ./out/test/runTest.js"
+        "test": "node ./out/test/runTest.js",
+        "ui-test": "npm run compile && extest setup-and-run"
     },
     "devDependencies": {
         "@types/chai": "^4.2.9",
@@ -84,7 +85,9 @@
         "sinon-chai": "^3.4.0",
         "tslint": "^6.0.0",
         "typescript": "^3.7.5",
-        "vscode-test": "^1.3.0"
+        "vscode-test": "^1.3.0",
+        "vscode-extension-tester": "^2.2.0",
+        "vscode-uitests-tooling": "^2.0.0"
     },
     "dependencies": {
         "child_process": "^1.0.2",
