@@ -22,6 +22,7 @@ import { PackageData, getPackageData } from './package_data';
 
 export function test() {
 	describe('Marketplace extension test', function () {
+		this.timeout(3500);
 		let packageData: PackageData;
 		let marketplace: Marketplace;
 		let wsdl2restExtension: ExtensionsViewItem;
