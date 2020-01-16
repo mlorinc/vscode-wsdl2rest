@@ -1,10 +1,12 @@
 import { expect } from 'chai';
 import { VSBrowser, WebDriver, until, By, Workbench } from 'vscode-extension-tester';
-import { Maven, CommandPalette, Dialog, Input, OutputViewExt, LogAnalyzer, NotificationWait, DefaultWait } from 'vscode-uitests-tooling';
+import { Maven, CommandPalette, Dialog, Input, OutputViewExt, LogAnalyzer, NotificationWait, DefaultWait, TimeoutPromise } from 'vscode-uitests-tooling';
 import { PackageData, getPackageData, Command } from './package_data';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
+import * as chokidar from 'chokidar';
+import * as webServer from '../test/app_soap'; 
 
 type Runtime = 'spring' | 'blueprint';
 type GenerationType = 'url' | 'file';
@@ -28,7 +30,7 @@ interface RuntimeOutput {
 
 const RUNTIME_FOLDER = path.join(process.cwd(), 'src', 'ui-test', 'runtimes');
 const WSDL_FILE = path.join(process.cwd(), 'src', 'test', 'address.wsdl');
-const WSDL_URL = 'http://localhost:3000/helloworldservice?wsdl';
+const WSDL_URL = webServer.getWSDLURL();
 export const WORKSPACE_PATH = path.join(process.cwd(), '.ui-testing');
 
 export function test(args: TestArguments) {
@@ -37,13 +39,40 @@ export function test(args: TestArguments) {
 		let driver: WebDriver;
 		let packageData: PackageData = getPackageData();
 
+		const expectedFiles = new Set(getExpectedFileList(args).map(f => path.join(WORKSPACE_PATH, f)));
+		let fileGenerationPromise: Promise<void> = null;
+		let watcher: chokidar.FSWatcher = null;
+
 		before('Project setup', async function () {
 			browser = VSBrowser.instance;
 			driver = browser.driver;
-			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH)
+			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
+
+			fileGenerationPromise = new Promise(resolve => {
+				watcher = chokidar.watch(WORKSPACE_PATH, {
+					persistent: true,
+					usePolling: false,
+					ignorePermissionErrors: false
+				});
+
+				watcher.on('add', path => {
+					if (expectedFiles.has(path)) {
+						expectedFiles.delete(path);
+						if (expectedFiles.size == 0) {
+							resolve();
+						}
+					}
+				});
+			}).then(() => {
+				watcher.close();
+				watcher = null;
+			});
 		});
 
 		after('Project cleanup', async function () {
+			if (watcher !== null) {
+				watcher.close();
+			}
 			for (const f of fs.readdirSync(WORKSPACE_PATH)) {
 				fsExtra.removeSync(path.join(WORKSPACE_PATH, f));
 			}
@@ -52,7 +81,7 @@ export function test(args: TestArguments) {
 		const command: Command = findCommand(args, packageData);
 
 		it(`Execute command: ${command.command}`, async function () {
-			this.timeout(4000);
+			this.timeout(6000);
 			const cmd = await CommandPalette.open();
 			await cmd.executeCommand(command.title);
 		});
@@ -124,28 +153,28 @@ export function test(args: TestArguments) {
 		});
 
 		it('Convert wsdl project', async function () {
-			this.timeout(9000);
+			this.timeout(15000);
 			const output = await OutputViewExt.open();
-			const hasText = await output.waitUntilContainsText('Process finished. Return code 0.', 6000);
-			expect(hasText).to.be.true;
+			const hasText = await output.waitUntilContainsText('Process finished. Return code 0.', 13500);
+			expect(hasText, 'Output did not finish with code 0 or timed out.\n Error: ' + await output.getText()).to.be.true;
 		});
 
 		describe('Generated all files', function () {
-			const files = getExpectedFileList(args);
-
-			for (const file of files) {
-				it(`Generated ${file}`, async function () {
-					this.retries(5);
-					const exists = fs.existsSync(path.join(WORKSPACE_PATH, file));
-					expect(exists).to.be.true;
-
-					if (!exists) {
-						await DefaultWait.sleep(150);
-					}
+			it('Created all required files', async function () {
+				this.timeout(10000);
+				new TimeoutPromise(async (resolve, reject) => {
+					await fileGenerationPromise;
+					resolve();
+				}, 8000).catch(e => {
+					console.error(e);
+					expect.fail(
+						'Test failed to generate:\n' +
+						Array(expectedFiles).map(file => `\r${file}`).join('\n')
+					);
 				});
-			}
+			});
 
-			it('Show notifications', async function() {
+			it('Show notifications', async function () {
 				const notifications = await new Workbench().getNotifications();
 				let notification = notifications.find(async n => await n.getMessage() == `Created ${getCamelContextPath(args)}`);
 
@@ -168,13 +197,14 @@ export function test(args: TestArguments) {
 
 			after('Make sure maven is not running', async function () {
 				if (maven.isRunning) {
-					await maven.exit();
+					await maven.exit(true);
 				}
 			});
 
-			it('Run projects', async function() {
-				this.timeout(10000);
+			it('Run projects', async function () {
+				this.timeout(30000);
 				maven = executeProject(args.framework, args.camelVersion);
+
 				const data = await analyzeProject(maven);
 				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
 
@@ -219,6 +249,10 @@ async function prepareMavenProject(runtime: Runtime, camelVersion: string): Prom
 		cwd: WORKSPACE_PATH
 	});
 	maven.spawn();
+
+	// show progress of install
+	maven.stdoutLineReader.on('line', console.log);
+	
 	return maven.wait();
 }
 
@@ -266,6 +300,16 @@ function getCamelContextPath(args: TestArguments): string {
 	}
 }
 
+function getSourceRootOfGeneratedFiles(args: TestArguments): string {
+	switch (args.type) {
+		case 'file':
+			return '/src/main/java/org/jboss/fuse/wsdl2rest/test/doclit';
+
+		case 'url':
+			return 'src/main/java/org/helloworld/test/rpclit';
+	}
+}
+
 function getExpectedFileList(args: TestArguments): string[] {
 	let files = [
 		'wsdl2rest.readme.md',
@@ -273,10 +317,9 @@ function getExpectedFileList(args: TestArguments): string[] {
 		getCamelContextPath(args)
 	];
 
-	let sourceRoot: string;
+	const sourceRoot: string = getSourceRootOfGeneratedFiles(args);
 	switch (args.type) {
 		case 'file':
-			sourceRoot = '/src/main/java/org/jboss/fuse/wsdl2rest/test/doclit';
 			files.push(
 				`${sourceRoot}/AddAddress.java`,
 				`${sourceRoot}/AddAddressResponse.java`,
@@ -296,7 +339,6 @@ function getExpectedFileList(args: TestArguments): string[] {
 			);
 			break;
 		case 'url':
-			sourceRoot = 'src/main/java/org/helloworld/test/rpclit';
 			files.push(
 				`${sourceRoot}/HelloPortType.java`,
 				`${sourceRoot}/HelloService.java`,
