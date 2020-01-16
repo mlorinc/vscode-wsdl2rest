@@ -7,6 +7,7 @@ import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
 import { Project } from 'vscode-uitests-tooling';
 import { VSBrowser, WebDriver } from 'vscode-extension-tester';
+import { PROJECT_PATH } from './package_data';
 
 describe('All tests', function () {
 	marketplaceTest.test();
@@ -31,7 +32,7 @@ describe('All tests', function () {
 			webserver.stopWebService();
 		});
 
-		for (const f of walk(path.join(process.cwd(), 'src/ui-test/test-data'))) {
+		for (const f of walk(path.join(PROJECT_PATH, 'src', 'ui-test', 'test-data'))) {
 			assert(f.endsWith('.json'), `${f} is not json file`);
 			const fileContent = fs.readFileSync(f, { encoding: 'utf8' });
 			extensionTest.test(JSON.parse(fileContent));
@@ -41,6 +42,8 @@ describe('All tests', function () {
 });
 
 function* walk(dir: string): Iterable<string> {
+	assert(fs.existsSync(dir), `Directory ${dir} does not exist`);
+
 	const stack = [dir];
 
 	while (stack.length > 0) {

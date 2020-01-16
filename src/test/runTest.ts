@@ -1,12 +1,13 @@
 import * as path from 'path';
 
 import { runTests } from 'vscode-test';
+import { PROJECT_PATH } from '../ui-test/package_data';
 
 async function main() {
 	try {
 		// The folder containing the Extension Manifest package.json
 		// Passed to `--extensionDevelopmentPath`
-		const extensionDevelopmentPath = path.resolve(__dirname, '../../../');
+		const extensionDevelopmentPath = PROJECT_PATH;
 
 		// The path to the extension test runner script
 		// Passed to --extensionTestsPath

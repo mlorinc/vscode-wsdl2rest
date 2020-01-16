@@ -11,7 +11,7 @@ export function run(): Promise<void> {
 		reporter: 'mocha-jenkins-reporter'
 	});
 
-	const testsRoot = path.resolve(__dirname, '..');
+	const testsRoot = __dirname;
 
 	return new Promise((c, e) => {
 		glob('**/**.test.js', { cwd: testsRoot }, (err, files) => {
@@ -21,7 +21,7 @@ export function run(): Promise<void> {
 
 			// Add files to the test suite
 			files.forEach(f => mocha.addFile(path.resolve(testsRoot, f)));
-
+			
 			try {
 				// Run the mocha test
 				mocha.run(failures => {

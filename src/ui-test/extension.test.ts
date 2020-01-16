@@ -1,7 +1,7 @@
 import { expect } from 'chai';
 import { VSBrowser, WebDriver, until, By, Workbench } from 'vscode-extension-tester';
 import { Maven, CommandPalette, Dialog, Input, OutputViewExt, LogAnalyzer, NotificationWait, DefaultWait, TimeoutPromise } from 'vscode-uitests-tooling';
-import { PackageData, getPackageData, Command } from './package_data';
+import { PackageData, getPackageData, Command, PROJECT_PATH } from './package_data';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
@@ -28,10 +28,10 @@ interface RuntimeOutput {
 	camelVersion: string;
 }
 
-const RUNTIME_FOLDER = path.join(process.cwd(), 'src', 'ui-test', 'runtimes');
-const WSDL_FILE = path.join(process.cwd(), 'src', 'test', 'address.wsdl');
+const RUNTIME_FOLDER = path.join(PROJECT_PATH, 'src', 'ui-test', 'runtimes');
+const WSDL_FILE = path.join(PROJECT_PATH, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
-export const WORKSPACE_PATH = path.join(process.cwd(), '.ui-testing');
+export const WORKSPACE_PATH = path.join(PROJECT_PATH, '.ui-testing');
 
 export function test(args: TestArguments) {
 	describe(`Extension test[${detailsString(args)}]`, function () {

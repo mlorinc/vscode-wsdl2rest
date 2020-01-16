@@ -20,6 +20,7 @@
 import * as http from 'http';
 import * as soap from 'soap';
 import * as path from 'path';
+import { PROJECT_PATH } from '../ui-test/package_data';
 
 var helloworldservice = {
 	HelloService: {
@@ -34,7 +35,7 @@ var helloworldservice = {
 	}
 };
 
-var wsdlFile = path.join(__dirname, '../../src/test/helloworld.wsdl');
+var wsdlFile = path.join(PROJECT_PATH, 'src/test/helloworld.wsdl');
 
 var wsdlxml = require('fs').readFileSync(wsdlFile, 'utf8');
 var server = null;
