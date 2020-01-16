@@ -12,6 +12,7 @@ describe('All tests', function () {
 	marketplaceTest.test();
 
 	describe('Extension tests', function() {
+		this.timeout(4000);
 		let browser: VSBrowser;
 		let driver: WebDriver;
 		let workspace: Project;
