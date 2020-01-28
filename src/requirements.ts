@@ -4,7 +4,7 @@
 import { workspace, Uri } from 'vscode';
 import * as cp from 'child_process';
 import * as path from 'path';
-import * as pathExists from 'path-exists';
+import * as fs from 'fs';
 import * as expandHomeDir from 'expand-home-dir';
 import findJavaHome = require("find-java-home");
 
@@ -52,10 +52,10 @@ function checkJavaRuntime(): Promise<string> {
 		}
 		if (javaHome) {
 			javaHome = expandHomeDir(javaHome);
-			if (!pathExists.sync(javaHome)) {
+			if (!fs.existsSync(javaHome)) {
 				openJDKDownload(reject, source + ' points to a missing folder');
 			}
-			if (!pathExists.sync(path.resolve(javaHome, 'bin', JAVAC_FILENAME))) {
+			if (!fs.existsSync(path.resolve(javaHome, 'bin', JAVAC_FILENAME))) {
 				openJDKDownload(reject, source + ' does not point to a JDK.');
 			}
 			return resolve(javaHome);

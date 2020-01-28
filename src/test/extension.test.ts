@@ -19,10 +19,6 @@
 
 import * as vscode from 'vscode';
 import * as assert from 'assert';
-import * as sinon from 'sinon';
-import * as path from 'path';
-import * as fileUrl from 'file-url';
-import * as app_soap from './app_soap';
 
 const extensionId = 'redhat.vscode-wsdl2rest';
 

@@ -33,7 +33,7 @@ describe('All tests', function () {
 		});
 
 		for (const f of walk(path.join(PROJECT_PATH, 'src', 'ui-test', 'test-data'))) {
-			assert(f.endsWith('.json'), `${f} is not json file`);
+			assert.ok(f.endsWith('.json'), `${f} is not json file`);
 			const fileContent = fs.readFileSync(f, { encoding: 'utf8' });
 			extensionTest.test(JSON.parse(fileContent));
 		}
@@ -42,7 +42,7 @@ describe('All tests', function () {
 });
 
 function* walk(dir: string): Iterable<string> {
-	assert(fs.existsSync(dir), `Directory ${dir} does not exist`);
+	assert.ok(fs.existsSync(dir), `Directory ${dir} does not exist`);
 
 	const stack = [dir];
 

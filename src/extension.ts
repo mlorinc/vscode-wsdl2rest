@@ -23,7 +23,7 @@ import * as path from 'path';
 import * as requirements from './requirements';
 import * as utils from './utils';
 import * as vscode from 'vscode';
-import * as fileUrl from 'file-url';
+import * as url from 'url';
 
 let outputChannel: vscode.OutputChannel;
 let wsdl2restProcess: child_process.ChildProcess;
@@ -196,7 +196,7 @@ function callWsdl2Rest(wsdl2restExecutablePath: string): Promise<boolean> {
 			
 			if (!(wsdlFileUri.startsWith('http:') || wsdlFileUri.startsWith('https:'))) {
 				if (!wsdlFileUri.startsWith('file:')) {
-					wsdlFileUri = fileUrl(wsdlFileUri);
+					wsdlFileUri = url.pathToFileURL(wsdlFileUri).toString();
 				}
 			}
 			
@@ -242,7 +242,7 @@ function callWsdl2Rest(wsdl2restExecutablePath: string): Promise<boolean> {
 					fs.copySync(path.resolve(originalLog4JProps), newLog4JProps);
 					utils.printDebug("New config folder: " + newLogsFolder);
 
-					let log4jConfigPath: string = fileUrl(newLog4JProps);
+					let log4jConfigPath: string = url.pathToFileURL(newLog4JProps).toString();
 					utils.printDebug("Log4J Config: " + log4jConfigPath);
 					javaExecutablePath = path.resolve(requirements.java_home + '/bin/java');
 
