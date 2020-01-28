@@ -57,12 +57,13 @@
         ]
     },
     "scripts": {
-        "vscode:prepublish": "npm run clean && npm run fatjar && npm install && npm run compile",
+        "vscode:prepublish": "npm run clean && npm install",
+        "preinstall": "npm run fatjar",
+        "postinstall": "node ./scripts/postinstall.js && npm run compile",
         "fatjar": "mvn install -f ./wsdl2rest/pom.xml",
         "clean": "rm -rf out || rmdir out /s /q",
         "compile": "tsc -p ./",
         "watch": "tsc -watch -p ./",
-        "postinstall": "node ./scripts/postinstall.js",
         "test": "node ./out/test/runTest.js",
         "lint": "tslint --project .",
         "ui-test": "extest setup-and-run out/ui-test/extension.all.test.js"
