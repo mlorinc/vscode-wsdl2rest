@@ -173,9 +173,29 @@ export function test(args: TestArguments) {
 
 		it('Convert wsdl project', async function () {
 			this.timeout(15000);
+			const resultRegex = /Process finished\. Return code (?<code>\d+)\./;
+
 			const output = await OutputViewExt.open();
-			const hasText = await output.waitUntilContainsText('Process finished. Return code 0.', 13500);
-			expect(hasText, 'Output did not finish with code 0 or timed out.\n Error: ' + await output.getText()).to.be.true;
+
+			while (!(await output.getChannelNames()).includes('WSDL2Rest'))
+				/* spin lock - wait for channel to appear */;
+
+			await output.selectChannel('WSDL2Rest');
+
+			let text: string | null = null;
+			let result: RegExpMatchArray | null = null;
+			do {
+				// ignore not clickable error
+				text = await output.getText().catch(e => null);
+
+				if (text === null) {
+					continue;
+				}
+				
+				result = text.match(resultRegex);
+			} while (text === null || !result);
+
+			expect(result.groups['code'], 'Output did not finish with code 0').to.equal('0');
 		});
 
 		describe('Generated all files', function () {
@@ -222,14 +242,18 @@ export function test(args: TestArguments) {
 
 			it('Run projects', async function () {
 				this.timeout(30000);
+				let mavenOutput = '';
+
 				maven = executeProject(args.framework, args.camelVersion);
+
+				maven.stdoutLineReader.on('line', line => mavenOutput += line + '\n');
 
 				const data = await analyzeProject(maven);
 				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
 
-				expect(parseInt(data.startedRoutes), "All routes were not started").to.equal(expectedRoutesCount);
-				expect(parseInt(data.totalRoutes), "Number of routes does not match").to.equal(expectedRoutesCount);
-				expect(data.camelVersion, "Camel version mismatch").to.equal(args.camelVersion);
+				expect(parseInt(data.startedRoutes), 'All routes were not started\n Maven output: ' + mavenOutput).to.equal(expectedRoutesCount);
+				expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
+				expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
 			});
 		});
 
