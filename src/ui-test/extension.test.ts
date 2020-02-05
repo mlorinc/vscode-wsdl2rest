@@ -232,8 +232,10 @@ function detailsString(args: TestArguments): string {
 	switch (args.type) {
 		case 'url':
 			segments.push(`url = ${WSDL_URL}`);
+			break;
 		case 'file':
 			segments.push(`file = ${WSDL_FILE}`);
+			break;
 	}
 	segments.push(args.framework);
 	segments.push(`camel = ${args.camelVersion}`);
