@@ -6,7 +6,7 @@ import * as extensionTest from './extension.test';
 import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
 import { Project } from 'vscode-uitests-tooling';
-import { VSBrowser, WebDriver } from 'vscode-extension-tester';
+import { VSBrowser } from 'vscode-extension-tester';
 
 describe('All tests', function () {
 	marketplaceTest.test();
@@ -19,7 +19,6 @@ describe('All tests', function () {
 		before('Setup environment', async function() {
 			this.timeout(23000);
 			browser = VSBrowser.instance;
-
 			workspace = await prepareWorkspace();
 			webserver.startWebService();
 		});
@@ -38,6 +37,11 @@ describe('All tests', function () {
 
 });
 
+/**
+ * Iterates over all files which are children of `dir`.
+ * @param dir starting directory
+ * @returns iterable object of file absolute paths
+ */
 function* walk(dir: string): Iterable<string> {
 	const stack = [dir];
 
@@ -46,6 +50,7 @@ function* walk(dir: string): Iterable<string> {
 		const stat = fs.statSync(file);
 
 		if (stat && stat.isDirectory()) {
+			// add directories and files to stack and transform filenames to absolute paths
 			stack.push(...fs.readdirSync(file).map(f => path.join(file, f)));
 		} else {
 			yield file;
@@ -53,6 +58,9 @@ function* walk(dir: string): Iterable<string> {
 	}
 }
 
+/**
+ * Creates new project and opens it in vscode
+ */
 async function prepareWorkspace(): Promise<Project> {
 	const project = new Project(extensionTest.WORKSPACE_PATH);
 	expect(project.exists).to.be.false;
@@ -62,7 +70,10 @@ async function prepareWorkspace(): Promise<Project> {
 	return project;
 }
 
-
+/**
+ * Closes and deletes project
+ * @param workspace project object returned from `prepareWorkspace` function
+ */
 async function clearWorkspace(workspace: Project): Promise<void> {
 	await workspace.close();
 	await workspace.delete();

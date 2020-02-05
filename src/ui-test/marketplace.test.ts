@@ -48,6 +48,7 @@ export function test() {
 		it('Registered all commands', async function () {
 			const cmd = await CommandPalette.open();
 			await cmd.setText('>wsdl2rest');
+			// wait for suggestions to show
 			await DefaultWait.sleep(750);
 			const quickPicks = await cmd.getQuickPicks();
 			const suggestions = await Promise.all(quickPicks.map(q => q.getText()));
