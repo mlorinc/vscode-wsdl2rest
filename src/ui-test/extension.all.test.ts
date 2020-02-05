@@ -14,13 +14,11 @@ describe('All tests', function () {
 	describe('Extension tests', function() {
 		this.timeout(4000);
 		let browser: VSBrowser;
-		let driver: WebDriver;
 		let workspace: Project;
 
 		before('Setup environment', async function() {
 			this.timeout(23000);
 			browser = VSBrowser.instance;
-			driver = browser.driver;
 
 			workspace = await prepareWorkspace();
 			webserver.startWebService();

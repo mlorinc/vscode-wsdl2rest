@@ -1,6 +1,6 @@
 import { expect } from 'chai';
 import { VSBrowser, WebDriver, until, By, Workbench } from 'vscode-extension-tester';
-import { Maven, CommandPalette, Dialog, Input, OutputViewExt, LogAnalyzer, NotificationWait, DefaultWait, TimeoutPromise } from 'vscode-uitests-tooling';
+import { Maven, CommandPalette, Dialog, Input, OutputViewExt, LogAnalyzer, TimeoutPromise } from 'vscode-uitests-tooling';
 import { PackageData, getPackageData, Command } from './package_data';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
