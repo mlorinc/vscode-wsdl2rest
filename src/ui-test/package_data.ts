@@ -18,6 +18,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+// start of package.json interfaces
 export interface Command {
 	command: string;
 	title: string;
@@ -32,7 +33,12 @@ export interface PackageData {
 	description?: string;
 	contributes?: Contributes;
 }
+// end of package.json interfaces
 
+/**
+ * Get package.json data
+ * @returns interface with data required for ui-tests. For more data, cast it to `{key: string}: string` type
+ */
 export function getPackageData(): PackageData {
 	if (packageData !== undefined) {
 		return packageData;
