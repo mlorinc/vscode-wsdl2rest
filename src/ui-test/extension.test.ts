@@ -15,12 +15,18 @@
  * limitations under the License.
  */
 
+
 import * as chokidar from 'chokidar';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
 import * as webServer from '../test/app_soap';
-import { Command, getPackageData, PackageData } from './package_data';
+import {
+	Command,
+	getPackageData,
+	PackageData,
+	projectPath
+} from './package_data';
 import {
 	CommandPalette,
 	Dialog,
@@ -67,11 +73,11 @@ interface RuntimeOutput {
 	camelVersion: string;
 }
 
-const RUNTIME_FOLDER = path.join(process.cwd(), 'src', 'ui-test', 'runtimes');
-const WSDL_FILE = path.join(process.cwd(), 'src', 'test', 'address.wsdl');
+const RUNTIME_FOLDER = path.join(projectPath, 'src', 'ui-test', 'runtimes');
+const WSDL_FILE = path.join(projectPath, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
 // temp directory for testing
-export const WORKSPACE_PATH = path.join(process.cwd(), '.ui-testing');
+export const WORKSPACE_PATH = path.join(projectPath, '.ui-testing');
 
 export function test(args: TestArguments) {
 	describe(`Extension test[${detailsString(args)}]`, function () {
@@ -203,9 +209,29 @@ export function test(args: TestArguments) {
 
 		it('Convert wsdl project', async function () {
 			this.timeout(15000);
+			const resultRegex = /Process finished\. Return code (?<code>\d+)\./;
+
 			const output = await OutputViewExt.open();
-			const hasText = await output.waitUntilContainsText('Process finished. Return code 0.', 13500);
-			expect(hasText, 'Output did not finish with code 0 or timed out.\n Error: ' + await output.getText()).to.be.true;
+
+			while (!(await output.getChannelNames()).includes('WSDL2Rest'))
+				/* spin lock - wait for channel to appear */;
+
+			await output.selectChannel('WSDL2Rest');
+
+			let text: string | null = null;
+			let result: RegExpMatchArray | null = null;
+			do {
+				// ignore not clickable error
+				text = await output.getText().catch(e => null);
+
+				if (text === null) {
+					continue;
+				}
+
+				result = text.match(resultRegex);
+			} while (text === null || !result);
+
+			expect(result.groups['code'], 'Output did not finish with code 0').to.equal('0');
 		});
 
 		describe('Generated all files', function () {
@@ -252,14 +278,15 @@ export function test(args: TestArguments) {
 
 			it('Run projects', async function () {
 				this.timeout(30000);
+
 				maven = executeProject(args.framework, args.camelVersion);
 
 				const data = await analyzeProject(maven);
 				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
 
-				expect(parseInt(data.startedRoutes), "All routes were not started").to.equal(expectedRoutesCount);
-				expect(parseInt(data.totalRoutes), "Number of routes does not match").to.equal(expectedRoutesCount);
-				expect(data.camelVersion, "Camel version mismatch").to.equal(args.camelVersion);
+				expect(parseInt(data.startedRoutes), 'All routes were not started').to.equal(expectedRoutesCount);
+				expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
+				expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
 			});
 		});
 
