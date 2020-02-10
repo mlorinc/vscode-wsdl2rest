@@ -7,6 +7,7 @@ import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
 import { Project } from 'vscode-uitests-tooling';
 import { VSBrowser } from 'vscode-extension-tester';
+import { projectPath } from './package_data';
 
 describe('All tests', function () {
 	marketplaceTest.test();
@@ -28,7 +29,7 @@ describe('All tests', function () {
 			webserver.stopWebService();
 		});
 
-		for (const f of walk(path.join(process.cwd(), 'src/ui-test/test-data'))) {
+		for (const f of walk(path.join(projectPath, 'src/ui-test/test-data'))) {
 			assert(f.endsWith('.json'), `${f} is not json file`);
 			const fileContent = fs.readFileSync(f, { encoding: 'utf8' });
 			extensionTest.test(JSON.parse(fileContent));
