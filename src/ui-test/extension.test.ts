@@ -248,12 +248,17 @@ export function test(args: TestArguments) {
 
 				maven.stdoutLineReader.on('line', line => mavenOutput += line + '\n');
 
-				const data = await analyzeProject(maven);
-				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
+				const outputPromise = new TimeoutPromise(async (resolve, reject) => {
+					const data = await analyzeProject(maven);
+					const expectedRoutesCount = getExpectedNumberOfRoutes(args);
+	
+					expect(parseInt(data.startedRoutes), 'All routes were not started\n Maven output: ' + mavenOutput).to.equal(expectedRoutesCount);
+					expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
+					expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
+					resolve();
+				}, 27000);
 
-				expect(parseInt(data.startedRoutes), 'All routes were not started\n Maven output: ' + mavenOutput).to.equal(expectedRoutesCount);
-				expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
-				expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
+				await outputPromise.catch(expect.fail);
 			});
 		});
 
