@@ -157,6 +157,9 @@ export function test(args: TestArguments) {
 				case 'file':
 					await Dialog.confirm(WSDL_FILE);
 					break;
+				default:
+					expect.fail('Unsupported option');
+					return null;
 			}
 		});
 
@@ -281,12 +284,17 @@ export function test(args: TestArguments) {
 
 				maven = executeProject(args.framework, args.camelVersion);
 
-				const data = await analyzeProject(maven);
-				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
+				const outputPromise = new TimeoutPromise(async (resolve, reject) => {
+					const data = await analyzeProject(maven);
+					const expectedRoutesCount = getExpectedNumberOfRoutes(args);
+	
+					expect(parseInt(data.startedRoutes), 'All routes were not started').to.equal(expectedRoutesCount);
+					expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
+					expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
+					resolve();
+				}, 27000);
 
-				expect(parseInt(data.startedRoutes), 'All routes were not started').to.equal(expectedRoutesCount);
-				expect(parseInt(data.totalRoutes), 'Number of routes does not match').to.equal(expectedRoutesCount);
-				expect(data.camelVersion, 'Camel version mismatch').to.equal(args.camelVersion);
+				await outputPromise.catch(expect.fail);
 			});
 		});
 
@@ -299,6 +307,9 @@ function findCommand(args: TestArguments, packageData: PackageData): Command {
 			return packageData.contributes.commands.find(x => x.command.endsWith('url'));
 		case 'file':
 			return packageData.contributes.commands.find(x => x.command.endsWith('local'));
+		default:
+			expect.fail('Unsupported option');
+			return null;
 	}
 }
 
@@ -312,6 +323,9 @@ function detailsString(args: TestArguments): string {
 		case 'file':
 			segments.push(`file = ${WSDL_FILE}`);
 			break;
+		default:
+			expect.fail('Unsupported option');
+			return null;
 	}
 	segments.push(args.framework);
 	segments.push(`camel = ${args.camelVersion}`);
@@ -366,6 +380,9 @@ function getExpectedNumberOfRoutes(args: TestArguments): number {
 			return 10;
 		case 'url':
 			return 2;
+		default:
+			expect.fail('Unsupported option');
+			return -1;
 	}
 }
 
@@ -375,6 +392,9 @@ function getCamelContextPath(args: TestArguments): string {
 			return 'src/main/resources/META-INF/spring/camel-context.xml';
 		case 'blueprint':
 			return 'src/main/resources/OSGI-INF/blueprint/blueprint.xml';
+		default:
+			expect.fail('Unsupported option');
+			return null;
 	}
 }
 
@@ -382,9 +402,11 @@ function getSourceRootOfGeneratedFiles(args: TestArguments): string {
 	switch (args.type) {
 		case 'file':
 			return '/src/main/java/org/jboss/fuse/wsdl2rest/test/doclit';
-
 		case 'url':
 			return 'src/main/java/org/helloworld/test/rpclit';
+		default:
+			expect.fail('Unsupported option');
+			return null;
 	}
 }
 
@@ -422,6 +444,9 @@ function getExpectedFileList(args: TestArguments): string[] {
 				`${sourceRoot}/HelloService.java`,
 			);
 			break;
+		default:
+			expect.fail('Unsupported option');
+			return null;
 	}
 	return files;
 }
