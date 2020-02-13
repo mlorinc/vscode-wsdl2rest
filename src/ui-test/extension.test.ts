@@ -206,7 +206,7 @@ export function test(args: TestArguments) {
 				if (expectedFiles.size !== 0) {
 					expect.fail(
 						'Test failed to generate:\n' +
-						Array.from(expectedFiles).map(file => `\t${file}`).join('\n')
+						Array.from(expectedFiles).map(file => `\t${file} (exists in filesystem: ${fs.existsSync(file)})`).join('\n')
 					);
 				}
 			});
