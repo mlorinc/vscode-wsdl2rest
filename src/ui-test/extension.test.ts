@@ -202,18 +202,18 @@ export function test(args: TestArguments) {
 		});
 
 		describe('Generated all files', function () {
-			it('Created all required files', async function () {
-				this.timeout(10000);
-				await new TimeoutPromise(async (resolve, reject) => {
-					await fileGenerationPromise;
-					resolve();
-				}, 8000).catch(e => {
-					console.error(e);
+			after('Print files which were not generated', function () {
+				if (expectedFiles.size !== 0) {
 					expect.fail(
 						'Test failed to generate:\n' +
-						Array(expectedFiles).map(file => `\t${file}`).join('\n')
+						Array.from(expectedFiles.values()).map(file => `\t${file}`).join('\n')
 					);
-				});
+				}
+			});
+
+			it('Created all required files', async function () {
+				this.timeout(20000);
+				await fileGenerationPromise;
 			});
 
 			it('Show notifications', async function () {
