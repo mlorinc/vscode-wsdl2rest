@@ -206,7 +206,7 @@ export function test(args: TestArguments) {
 				if (expectedFiles.size !== 0) {
 					expect.fail(
 						'Test failed to generate:\n' +
-						Array.from(expectedFiles.values()).map(file => `\t${file}`).join('\n')
+						Array.from(expectedFiles).map(file => `\t${file}`).join('\n')
 					);
 				}
 			});
@@ -221,10 +221,14 @@ export function test(args: TestArguments) {
 				let notification = notifications.find(async n => await n.getMessage() == `Created ${getCamelContextPath(args)}`);
 
 				if (notification === undefined) {
-					expect.fail('Did not find notification');
+					expect.fail('Did not find camel context notification');
 				}
 
 				notification = notifications.find(async n => await n.getMessage() == 'Created CXF artifacts for specified WSDL at src/main');
+
+				if (notification === undefined) {
+					expect.fail('Did not find cxf notification');
+				}
 			});
 		});
 
