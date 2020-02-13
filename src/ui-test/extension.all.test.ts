@@ -15,16 +15,16 @@
  * limitations under the License.
  */
 
-import * as marketplaceTest from './marketplace.test';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as assert from 'assert';
 import * as extensionTest from './extension.test';
+import * as fs from 'fs';
+import * as marketplaceTest from './marketplace.test';
+import * as path from 'path';
 import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
 import { Project } from 'vscode-uitests-tooling';
-import { VSBrowser } from 'vscode-extension-tester';
 import { projectPath } from './package_data';
+import { VSBrowser } from 'vscode-extension-tester';
 
 describe('All tests', function () {
 	marketplaceTest.test();

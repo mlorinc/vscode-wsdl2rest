@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
+import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as assert from 'assert';
 
 // start of package.json interfaces
 export interface Command {

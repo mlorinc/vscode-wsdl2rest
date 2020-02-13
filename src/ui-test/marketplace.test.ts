@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 
-import { expect } from 'chai';
+import { CommandPalette, DefaultWait, Marketplace } from 'vscode-uitests-tooling';
 import { EditorView, ExtensionsViewItem } from 'vscode-extension-tester';
-import { Marketplace, CommandPalette, DefaultWait } from 'vscode-uitests-tooling';
-import { PackageData, getPackageData } from './package_data';
+import { expect } from 'chai';
+import { getPackageData, PackageData } from './package_data';
 
 export function test() {
 	describe('Marketplace extension test', function () {
