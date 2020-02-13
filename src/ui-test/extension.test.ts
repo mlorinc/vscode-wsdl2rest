@@ -247,7 +247,7 @@ export function test(args: TestArguments) {
 					console.error(e);
 					expect.fail(
 						'Test failed to generate:\n' +
-						Array(expectedFiles).map(file => `\r${file}`).join('\n')
+						Array(expectedFiles).map(file => `\t${file}`).join('\n')
 					);
 				});
 			});
