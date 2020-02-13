@@ -204,7 +204,7 @@ export function test(args: TestArguments) {
 		describe('Generated all files', function () {
 			it('Created all required files', async function () {
 				this.timeout(10000);
-				new TimeoutPromise(async (resolve, reject) => {
+				await new TimeoutPromise(async (resolve, reject) => {
 					await fileGenerationPromise;
 					resolve();
 				}, 8000).catch(e => {
