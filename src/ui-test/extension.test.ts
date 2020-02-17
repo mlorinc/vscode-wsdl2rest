@@ -40,6 +40,7 @@ interface RuntimeOutput {
 const RUNTIME_FOLDER = path.join(projectPath, 'src', 'ui-test', 'runtimes');
 const WSDL_FILE = path.join(projectPath, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
+
 // temp directory for testing
 export const WORKSPACE_PATH = path.join(projectPath, '.ui-testing');
 
@@ -59,37 +60,49 @@ export function test(args: TestArguments) {
 		let watcher: chokidar.FSWatcher = null;
 
 		before('Project setup', async function () {
+			this.timeout(8000)
 			browser = VSBrowser.instance;
 			driver = browser.driver;
 
 			// copy runtime project to temp testing folder, so we can start test scenario
 			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
 
+			// ensure expected files do not exist yet
+			const existsPromises = Array.from(expectedFiles).map(async file => {
+				expect(fs.existsSync(file), `File ${file} should not exist`).to.be.false;
+			});
+
+			// wait for file checks
+			await Promise.all(existsPromises);
+
 			// initialize watcher
 			fileGenerationPromise = new Promise(resolve => {
 				watcher = chokidar
 					.watch(WORKSPACE_PATH, {
 						persistent: true,
-						usePolling: false,
-						ignorePermissionErrors: false
+						usePolling: true,
+						ignorePermissionErrors: false,
+						ignoreInitial: true,
+						awaitWriteFinish: true
 					})
 					.on('add', path => {
 						if (expectedFiles.has(path)) {
 							expectedFiles.delete(path);
-							if (expectedFiles.size == 0) {
+							if (expectedFiles.size === 0) {
 								resolve();
 							}
 						}
 					});
-			}).then(() => {
-				watcher.close();
+			}).then(async () => {
+				await watcher.close();
 				watcher = null;
 			});
 		});
 
 		after('Project cleanup', async function () {
 			if (watcher !== null) {
-				watcher.close();
+				await watcher.close();
+				watcher = null;
 			}
 			// remove all files from temp directory
 			for (const f of fs.readdirSync(WORKSPACE_PATH)) {
