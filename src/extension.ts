@@ -26,6 +26,7 @@ import * as vscode from 'vscode';
 import * as fileUrl from 'file-url';
 
 let outputChannel: vscode.OutputChannel;
+let debugChannel: vscode.OutputChannel;
 let wsdl2restProcess: child_process.ChildProcess;
 let javaExecutablePath: string;
 let wsdl2restExecutablePath: string;
@@ -45,6 +46,21 @@ export function activate(context: vscode.ExtensionContext) {
 	outputChannel = vscode.window.createOutputChannel("WSDL2Rest");
 	context.subscriptions.push(vscode.commands.registerCommand('extension.wsdl2rest.local', () => callWsdl2RestViaUIAsync(false)));
 	context.subscriptions.push(vscode.commands.registerCommand('extension.wsdl2rest.url', () => callWsdl2RestViaUIAsync(true)));
+	debugChannel = vscode.window.createOutputChannel("[DEBUG] WSDL2Rest");
+
+	const [log, err] = [console.log, console.error];
+
+	console.log = (message?: any, ...optionalParameters: any[]) => {
+		log(message, optionalParameters);
+		debugChannel.appendLine(`[LOG] ${message} ${optionalParameters.join(', ')}`);
+	};
+
+	console.error = (message?: any, ...optionalParameters: any[]) => {
+		err(message, optionalParameters);
+		debugChannel.appendLine(`[ERR] ${message} ${optionalParameters.join(', ')}`);
+	};
+
+	debugChannel.show(true);
 }
 
 // note this is just exposed for testing purposes

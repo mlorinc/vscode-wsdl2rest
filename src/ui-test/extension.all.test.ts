@@ -22,7 +22,7 @@ import * as marketplaceTest from './marketplace.test';
 import * as path from 'path';
 import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
-import { Project } from 'vscode-uitests-tooling';
+import { OutputViewExt, Project } from 'vscode-uitests-tooling';
 import { projectPath } from './package_data';
 import { VSBrowser } from 'vscode-extension-tester';
 
@@ -42,6 +42,10 @@ describe('All tests', function () {
 		});
 
 		after('Clear environment', async function() {
+			const output = OutputViewExt.getInstance();
+			await output.selectChannel('[DEBUG] WSDL2Rest');
+			console.log(await output.getText());
+
 			await clearWorkspace(workspace);
 			webserver.stopWebService();
 		});
