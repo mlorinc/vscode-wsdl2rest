@@ -218,6 +218,7 @@ export function test(args: TestArguments) {
 				result = text.match(resultRegex);
 			} while (text === null || !result);
 
+			await output.clearText();
 			expect(result.groups['code'], 'Output did not finish with code 0').to.equal('0');
 		});
 
@@ -235,27 +236,37 @@ export function test(args: TestArguments) {
 				this.timeout(20000);
 
 				const existPromises = Array.from(expectedFiles).map(async file => {
-					while(!fs.existsSync(file)) {
+					while (!fs.existsSync(file)) {
 						await DefaultWait.sleep(500);
 					}
 					expectedFiles.delete(file);
 				});
-				
+
 				await Promise.all(existPromises);
 			});
 
 			it('Show notifications', async function () {
 				const notifications = await new Workbench().getNotifications();
+				const errors: string[] = [];
+
 				let notification = notifications.find(async n => await n.getMessage() == `Created ${getCamelContextPath(args)}`);
 
 				if (notification === undefined) {
-					expect.fail('Did not find camel context notification');
+					errors.push('Did not find camel context notification');
 				}
 
 				notification = notifications.find(async n => await n.getMessage() == 'Created CXF artifacts for specified WSDL at src/main');
 
 				if (notification === undefined) {
-					expect.fail('Did not find cxf notification');
+					errors.push('Did not find cxf notification');
+				}
+
+				notifications.forEach(async n => {
+					console.log(`[DEBUG]: Notification message: ${await n.getMessage()}`);
+				});
+
+				if (errors.length > 0) {
+					expect.fail(errors.join("\n"));
 				}
 			});
 		});
@@ -276,7 +287,7 @@ export function test(args: TestArguments) {
 			});
 
 			it('Run projects', async function () {
-				this.timeout(30000);
+				this.timeout(70000);
 
 				maven = executeProject(args);
 
@@ -452,4 +463,4 @@ function getExpectedFileList(args: TestArguments): string[] {
 async function getInput(): Promise<Input> {
 	await InputBox.create();
 	return Input.getInstance();
-} 
+}
