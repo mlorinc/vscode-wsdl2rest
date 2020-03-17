@@ -52,6 +52,7 @@ const mavenGoals = {
 };
 
 export interface TestArguments {
+	camelMavenPluginVersion?: string;
 	camelVersion: string;
 	framework: Runtime;
 	type: GenerationType;
@@ -87,6 +88,10 @@ export function test(args: TestArguments) {
 
 		// set of expected files from wsdl2rest process
 		const expectedFiles = new Set(getExpectedFileList(args).map(f => path.join(WORKSPACE_PATH, f)));
+
+		if (args.camelMavenPluginVersion == null) {
+			args.camelMavenPluginVersion = args.camelVersion;
+		}
 
 		before('Project setup', async function () {
 			this.timeout(8000)
@@ -258,22 +263,22 @@ export function test(args: TestArguments) {
 		describe('Test generated project', function () {
 			let maven: Maven;
 
-			before('Install maven project', async function () {
-				this.timeout(0);
-				const exitCode = await prepareMavenProject(args.framework, args.camelVersion);
-				expect(exitCode).to.equal(0);
-			});
-
 			after('Make sure maven is not running', async function () {
 				if (maven.isRunning) {
 					await maven.exit(true);
 				}
 			});
 
+			it('Installs project', async function () {
+				this.timeout(0);
+				const exitCode = await prepareMavenProject(args);
+				expect(exitCode).to.equal(0);
+			});
+
 			it('Run projects', async function () {
 				this.timeout(30000);
 
-				maven = executeProject(args.framework, args.camelVersion);
+				maven = executeProject(args);
 
 				const outputPromise = new TimeoutPromise(async (resolve, reject) => {
 					const data = await analyzeProject(maven);
@@ -323,11 +328,12 @@ function detailsString(args: TestArguments): string {
 	return segments.join(', ');
 }
 
-async function prepareMavenProject(runtime: Runtime, camelVersion: string): Promise<number> {
+async function prepareMavenProject(args: TestArguments): Promise<number> {
 	const maven = new Maven({
 		args: ['clean', 'install'],
 		properties: {
-			'camel.version': camelVersion
+			'camel.version': args.camelVersion,
+			'camel.maven.plugin.version': args.camelMavenPluginVersion
 		},
 		cwd: WORKSPACE_PATH
 	});
@@ -339,16 +345,17 @@ async function prepareMavenProject(runtime: Runtime, camelVersion: string): Prom
 	return maven.wait();
 }
 
-function executeProject(runtime: Runtime, camelVersion: string): Maven {
+function executeProject(args: TestArguments): Maven {
 	const maven = new Maven({
-		args: [mavenGoals[runtime]],
+		args: [mavenGoals[args.framework]],
 		properties: {
-			'camel.version': camelVersion
+			'camel.version': args.camelVersion,
+			'camel.maven.plugin.version': args.camelMavenPluginVersion
 		},
 		cwd: WORKSPACE_PATH
 	});
-
 	maven.spawn();
+	maven.stdoutLineReader.on('line', console.log);
 	return maven;
 }
 
