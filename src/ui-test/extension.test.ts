@@ -152,7 +152,7 @@ export function test(args: TestArguments) {
 
 			await input.test({
 				placeholder: 'Specify which DSL to generate the Camel configuration for',
-				quickPicks: ['Spring', 'Blueprint']
+				// quickPicks: ['Spring', 'Blueprint']
 			});
 
 			await input.setText(args.framework);
