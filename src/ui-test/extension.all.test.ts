@@ -22,9 +22,9 @@ import * as marketplaceTest from './marketplace.test';
 import * as path from 'path';
 import * as webserver from '../test/app_soap';
 import { expect } from 'chai';
-import { OutputViewExt, Project } from 'vscode-uitests-tooling';
+import { OutputViewExt, Project, DefaultWait } from 'vscode-uitests-tooling';
 import { projectPath } from './package_data';
-import { VSBrowser } from 'vscode-extension-tester';
+import { VSBrowser, WebDriver, until, Workbench } from 'vscode-extension-tester';
 
 describe('All tests', function () {
 	marketplaceTest.test();
@@ -37,7 +37,7 @@ describe('All tests', function () {
 		before('Setup environment', async function() {
 			this.timeout(23000);
 			browser = VSBrowser.instance;
-			workspace = await prepareWorkspace();
+			workspace = await prepareWorkspace(browser);
 			webserver.startWebService();
 		});
 
@@ -83,12 +83,23 @@ function* walk(dir: string): Iterable<string> {
 /**
  * Creates new project and opens it in vscode
  */
-async function prepareWorkspace(): Promise<Project> {
+async function prepareWorkspace(browser: VSBrowser): Promise<Project> {
 	const project = new Project(extensionTest.WORKSPACE_PATH);
+	
 	expect(project.exists).to.be.false;
 	project.create();
 	expect(project.exists).to.be.true;
+	
+	const workbench = new Workbench();
+
 	await project.open();
+
+	// source: https://github.com/redhat-developer/vscode-extension-tester/issues/76
+	// wait for workbench to unload
+	await browser.driver.wait(until.stalenessOf(workbench));
+	// wait for workbench to load up again
+	await browser.waitForWorkbench();
+
 	return project;
 }
 
