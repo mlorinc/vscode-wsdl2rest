@@ -287,7 +287,7 @@ export function test(args: TestArguments) {
 			});
 
 			it('Run projects', async function () {
-				this.timeout(70000);
+				this.timeout(30000);
 
 				maven = executeProject(args);
 
@@ -341,7 +341,7 @@ function detailsString(args: TestArguments): string {
 
 async function prepareMavenProject(args: TestArguments): Promise<number> {
 	const maven = new Maven({
-		args: ['clean', 'install'],
+		args: ['clean', 'dependency:go-offline'],
 		properties: {
 			'camel.version': args.camelVersion,
 			'camel.maven.plugin.version': args.camelMavenPluginVersion
