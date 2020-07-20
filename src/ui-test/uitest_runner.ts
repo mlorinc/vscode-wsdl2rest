@@ -29,16 +29,16 @@ const extensionFolder = path.join(projectPath, '.test-extensions');
 const vscodeVersion = undefined;
 
 async function main(): Promise<void> {
-    // make sure extension folder is empty
-    fsExtra.removeSync(extensionFolder);
-    fsExtra.mkdirsSync(extensionFolder);
+	// make sure extension folder is empty
+	fsExtra.removeSync(extensionFolder);
+	fsExtra.mkdirsSync(extensionFolder);
 
-    const tester = new ExTester(storageFolder, releaseType, extensionFolder);
+	const tester = new ExTester(storageFolder, releaseType, extensionFolder);
 
-    await tester.downloadCode(vscodeVersion);
-    await tester.downloadChromeDriver(vscodeVersion);
+	await tester.downloadCode(vscodeVersion);
+	await tester.downloadChromeDriver(vscodeVersion);
 
-    await tester.runTests('out/ui-test/extension.all.test.js', vscodeVersion);
+	await tester.runTests('out/ui-test/extension.all.test.js', vscodeVersion);
 }
 
 main();

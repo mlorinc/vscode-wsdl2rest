@@ -43,10 +43,8 @@ export function test() {
 		after('Clear workspace', async function () {
 			this.timeout(10000);
 			await section.clearSearch();
-			await Promise.all([
-				marketplace.close(),
-				new EditorView().closeAllEditors()
-			]);
+			await marketplace.close().catch((e) => console.warn(`[WARNING]: Could not close marketplace - ${e}`));
+			await new EditorView().closeAllEditors().catch((e) => console.warn(`[WARNING]: Could not close editors - ${e}`));
 		});
 
 		it('Find extension', async function () {
