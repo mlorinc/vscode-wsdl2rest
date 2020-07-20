@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+import * as cp from 'child_process';
 import * as fs from 'fs';
 import * as fsExtra from 'fs-extra';
 import * as path from 'path';
@@ -26,17 +27,19 @@ import {
 	projectPath
 } from './package_data';
 import {
-	CommandPalette,
 	DefaultWait,
 	Dialog,
-	Input,
 	LogAnalyzer,
 	Maven,
-	OutputViewExt
+	OutputViewExt,
+	Project,
+	AsyncProcess,
+	AsyncCommandProcess
 } from 'vscode-uitests-tooling';
 import { expect } from 'chai';
 import {
 	InputBox,
+	Key,
 	NotificationsCenter,
 	NotificationType,
 	VSBrowser,
@@ -79,10 +82,10 @@ const RUNTIME_FOLDER = path.join(projectPath, 'src', 'ui-test', 'runtimes');
 const WSDL_FILE = path.join(projectPath, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
 
-// temp directory for testing
-export const WORKSPACE_PATH = path.join(projectPath, '.ui-testing');
-
 export function test(args: TestArguments) {
+	// temp directory for testing
+	const WORKSPACE_PATH = path.join(projectPath, `.ui-testing-${args.framework}-${args.type}-${args.camelVersion}`);
+
 	// set of expected files from wsdl2rest process
 	const expectedFiles = new Set(getExpectedFileList(args).map(f => path.join(WORKSPACE_PATH, f)));
 
@@ -90,15 +93,19 @@ export function test(args: TestArguments) {
 		let browser: VSBrowser;
 		let driver: WebDriver;
 		let packageData: PackageData = getPackageData();
+		let workspace: Project;
 
 		if (args.camelMavenPluginVersion == null) {
 			args.camelMavenPluginVersion = args.camelVersion;
 		}
 
 		before('Project setup', async function () {
-			this.timeout(8000)
+			this.timeout(45000);
 			browser = VSBrowser.instance;
 			driver = browser.driver;
+
+			workspace = await prepareWorkspace(browser, WORKSPACE_PATH);
+			await DefaultWait.sleep(20000);
 
 			// copy runtime project to temp testing folder, so we can start test scenario
 			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
@@ -110,10 +117,9 @@ export function test(args: TestArguments) {
 		});
 
 		after('Project cleanup', async function () {
-			// remove all files from temp directory
-			for (const f of fs.readdirSync(WORKSPACE_PATH)) {
-				fsExtra.removeSync(path.join(WORKSPACE_PATH, f));
-			}
+			this.timeout(20000);
+			await clearWorkspace(workspace);
+			await DefaultWait.sleep(12000);
 		});
 
 		const command: Command = findCommand(args, packageData);
@@ -170,28 +176,28 @@ export function test(args: TestArguments) {
 			expect(await input.getPlaceHolder()).to.be.equal('Enter the address for the running jaxws endpoint (defaults to http://localhost:8080/somepath)');
 			expect(await input.getMessage()).to.be.equal('JAXWS Endpoint (Press \'Enter\' to confirm or \'Escape\' to cancel)');
 
+			await input.setText(`http://localhost:8080/jaxrs`);
 			await input.confirm();
 		});
 
 		it('Confirm JAX-RS endpoint', async function () {
 			const input = await getInput();
 
-
 			expect(await input.getPlaceHolder()).to.be.equal('Enter the address for the jaxrs endpoint (defaults to http://localhost:8081/jaxrs)');
 			expect(await input.getMessage()).to.be.equal('JAXRS Endpoint (Press \'Enter\' to confirm or \'Escape\' to cancel)');
 
-			await input.setText('http://localhost:8000/jaxrs');
+			await input.setText(`http://localhost:8081/jaxrs`);
 			await input.confirm();
 		});
 
 		it('Convert wsdl project', async function () {
-			this.timeout(15000);
+			this.timeout(25000);
 			const resultRegex = /Process finished\. Return code (?<code>\d+)\./;
 
 			const output = await OutputViewExt.open();
 
-			while (!(await output.getChannelNames()).includes('WSDL2Rest'))
-				/* spin lock - wait for channel to appear */;
+			while (!(await output.getChannelNames()).includes('WSDL2Rest'));
+			/* spin lock - wait for channel to appear */
 
 			await output.selectChannel('WSDL2Rest');
 
@@ -207,7 +213,6 @@ export function test(args: TestArguments) {
 
 				result = text.match(resultRegex);
 			} while (text === null || !result);
-
 			await output.clearText();
 			expect(result.groups['code'], 'Output did not finish with code 0').to.equal('0');
 		});
@@ -215,7 +220,7 @@ export function test(args: TestArguments) {
 		describe('Generated all files', function () {
 			let notificationCenter: NotificationsCenter;
 
-			before('Open notification center', async function() {
+			before('Open notification center', async function () {
 				notificationCenter = await new Workbench().openNotificationsCenter();
 			});
 
@@ -225,7 +230,7 @@ export function test(args: TestArguments) {
 
 			it('Show notifications', async function () {
 				this.retries(10);
-		
+
 				const notifications = await notificationCenter.getNotifications(NotificationType.Any);
 				const errors: string[] = [];
 
@@ -249,47 +254,100 @@ export function test(args: TestArguments) {
 				});
 
 				if (errors.length > 0) {
-					await DefaultWait.sleep(250);
 					expect.fail(errors.join("\n"));
 				}
 			});
 
 			for (const file of Array.from(expectedFiles)) {
 				it(`Generated ${file}`, async function () {
-					expect(fs.existsSync(file), `File ${file} does not exist`).to.be.true;
+					this.timeout(6000);
+					await browser.driver.wait(() => fs.existsSync(file), 5000).catch(() => expect.fail(`File ${file} does not exist`));
 				});
 			}
 		});
 
 		describe('Test generated project', function () {
-			let maven: Maven = null;
-
-			after('Make sure maven is not running', async function () {
-				if (maven?.isRunning) {
-					await maven.exit();
-				}
-			});
+			let maven: AsyncProcess = null;
+			let analyzer: LogAnalyzer = null;
 
 			it('Installs project', async function () {
 				this.timeout(0);
-				const exitCode = await prepareMavenProject(args);
+				const exitCode = await prepareMavenProject(args, WORKSPACE_PATH).catch(expect.fail);
 				expect(exitCode).to.equal(0);
 			});
 
-			it('Run projects', async function () {
+			it('Runs project', async function () {
 				// camel-maven-plugin must be downloaded
-				this.timeout(150000);
-				maven = executeProject(args);
-				const data = await analyzeProject(maven);
+				this.timeout(350000);
+
+				maven = executeProject(args, WORKSPACE_PATH);
+
+				maven.process.on('error', (err: Error) => {
+					expect.fail(`[ERROR] Run project: ${err}`);
+				});
+
+				analyzer = analyzeProject(maven);
+
+
+				const data = await analyzer.wait() as RuntimeOutput;
 				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
 
 				expect(parseInt(data.startedRoutes), "All routes were not started").to.equal(expectedRoutesCount);
 				expect(parseInt(data.totalRoutes), "Number of routes does not match").to.equal(expectedRoutesCount);
 				expect(data.camelVersion, "Camel version mismatch").to.equal(args.camelVersion);
 			});
+
+			it('Stops project', async function () {
+				this.timeout(75000);
+
+				if (process.platform === 'win32') {
+					const pid = maven.process.pid;
+					const cmd = cp.spawnSync('taskkill', ['/PID', pid.toString(), '/T', '/F'], {
+						shell: true
+					});
+					if (cmd.status !== 0) {
+						expect.fail(`[ERROR] Could not kill maven process with pid ${pid}.`);
+					}
+				}
+				else {
+					// try to kill process
+					const exited = await maven?.exit(false, 20000).then(() => true).catch(() => false);
+
+					if (!exited) {
+						// force process kill
+						await maven?.exit(true, 20000).catch(expect.fail);
+					}
+				}
+
+			});
 		});
 
 	});
+}
+
+/**
+ * Creates new project and opens it in vscode
+ */
+async function prepareWorkspace(browser: VSBrowser, workspacePath: string): Promise<Project> {
+	const project = new Project(workspacePath);
+	fsExtra.removeSync(workspacePath);
+
+	project.create();
+	await browser.waitForWorkbench();
+	// Close 'Select editor' prompt on Windows.
+	await browser.driver.actions().sendKeys(Key.ESCAPE).perform();
+	await project.open();
+
+	return project;
+}
+
+/**
+ * Closes and deletes project
+ * @param workspace project object returned from `prepareWorkspace` function
+ * @param timeout timeout for driver to wait
+ */
+async function clearWorkspace(workspace: Project): Promise<void> {
+	await workspace.close();
 }
 
 function findCommand(args: TestArguments, packageData: PackageData): Command {
@@ -323,14 +381,15 @@ function detailsString(args: TestArguments): string {
 	return segments.join(', ');
 }
 
-async function prepareMavenProject(args: TestArguments): Promise<number> {
+async function prepareMavenProject(args: TestArguments, workspacePath: string): Promise<number> {
 	const maven = new Maven({
 		args: ['clean', 'install'],
 		properties: {
 			'camel.version': args.camelVersion,
 			'camel.maven.plugin.version': args.camelMavenPluginVersion
 		},
-		cwd: WORKSPACE_PATH
+		cwd: workspacePath,
+		shell: true
 	});
 	maven.spawn();
 
@@ -340,32 +399,32 @@ async function prepareMavenProject(args: TestArguments): Promise<number> {
 	return maven.wait();
 }
 
-function executeProject(args: TestArguments): Maven {
-	const maven = new Maven({
+function executeProject(args: TestArguments, workspacePath: string): AsyncProcess {
+	const mavenProcess = new Maven({
 		args: [mavenGoals[args.framework]],
 		properties: {
 			'camel.version': args.camelVersion,
 			'camel.maven.plugin.version': args.camelMavenPluginVersion
 		},
-		cwd: WORKSPACE_PATH,
-		timeout: 150000
+		cwd: workspacePath,
+		timeout: 345000,
+		// run maven in shell environment on Windows
+		shell: process.platform === 'win32'
 	});
-	maven.spawn();
-	maven.stdoutLineReader.on('line', console.log);
-	return maven;
+
+	mavenProcess.spawn();
+	mavenProcess.stdoutLineReader.on('line', console.log);
+	return mavenProcess;
 }
 
-async function analyzeProject(maven: Maven): Promise<RuntimeOutput> {
+function analyzeProject(maven: AsyncProcess): LogAnalyzer {
 	const analyzer = new LogAnalyzer(maven.stdoutLineReader);
-
 	analyzer.whenMatchesThenCaptureData(/.*Total (?<totalRoutes>\d+) routes, of which (?<startedRoutes>\d+) are started/);
 	analyzer.whenMatchesThenCaptureData(
 		/.*Apache Camel (?<camelVersion>\d+\.\d+\.\d+(|\.[a-zA-Z0-9-_]+)) \(CamelContext: .+\) started in.*/
 	);
 	analyzer.startOrderedParsing();
-
-	const analyzerResult = await analyzer.wait() as RuntimeOutput;
-	return analyzerResult;
+	return analyzer;
 }
 
 function getExpectedNumberOfRoutes(args: TestArguments): number {
@@ -437,7 +496,7 @@ function getExpectedFileList(args: TestArguments): string[] {
 
 async function getInput(): Promise<InputBox> {
 	return InputBox.create();
-} 
+}
 
 async function getQuickPicks(input: InputBox) {
 	const quickPicks = await input.getQuickPicks();

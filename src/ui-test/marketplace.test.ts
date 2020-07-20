@@ -23,6 +23,7 @@ import {
 	InputBox,
 	SideBarView,
 	Workbench,
+	VSBrowser,
 } from 'vscode-extension-tester';
 import { expect } from 'chai';
 import { getPackageData, PackageData } from './package_data';
@@ -39,19 +40,18 @@ export function test() {
 			this.timeout(10000);
 			packageData = getPackageData();
 			marketplace = await Marketplace.open();
-			section = (await new SideBarView().getContent().getSection('Enabled')) as ExtensionsViewSection;
+			section = await VSBrowser.instance.driver.wait(async () => (await new SideBarView().getContent().getSection('Installed').catch(() => undefined)), 7000) as ExtensionsViewSection;
 		});
 
 		after('Clear workspace', async function () {
 			await section.clearSearch();
-			await Promise.all([
-				marketplace.close(),
-				new EditorView().closeAllEditors()
-			]);
+			await marketplace.close().catch((e) => console.warn(`[WARNING]: Could not close marketplace - ${e}`));
+			await new EditorView().closeAllEditors().catch((e) => console.warn(`[WARNING]: Could not close editors - ${e}`));
 		});
 
 		it('Find extension', async function () {
-			this.timeout(10000);
+			this.timeout(20000);
+			await DefaultWait.sleep(5000);
 			wsdl2restExtension = await section.findItem(`@installed ${packageData.displayName}`);
 			expect(wsdl2restExtension).not.to.be.undefined;
 		});
@@ -73,7 +73,7 @@ export function test() {
 		});
 
 		it('Registered all commands', async function () {
-			const cmd = await new Workbench().openCommandPrompt() as InputBox;
+			const cmd = await new Workbench().openCommandPrompt().catch((e) => expect.fail(`Could not open command prompt: ${e}.`)) as InputBox;
 			await cmd.setText('>wsdl2rest');
 			// wait for suggestions to show
 			await DefaultWait.sleep(750);

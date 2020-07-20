@@ -23,7 +23,7 @@ import {
 } from 'vscode-extension-tester';
 import { expect } from 'chai';
 import { getPackageData, PackageData } from './package_data';
-import { Marketplace } from 'vscode-uitests-tooling';
+import { Marketplace, DefaultWait } from 'vscode-uitests-tooling';
 
 export function test() {
 	describe('Marketplace install test', function () {
@@ -37,20 +37,19 @@ export function test() {
 			this.timeout(10000);
 			packageData = getPackageData();
 			marketplace = await Marketplace.open();
-			section = (await new SideBarView().getContent().getSection('Enabled')) as ExtensionsViewSection;
+			section = (await new SideBarView().getContent().getSection('Installed')) as ExtensionsViewSection;
 		});
 
 		after('Clear workspace', async function () {
 			this.timeout(10000);
 			await section.clearSearch();
-			await Promise.all([
-				marketplace.close(),
-				new EditorView().closeAllEditors()
-			]);
+			await marketplace.close().catch((e) => console.warn(`[WARNING]: Could not close marketplace - ${e}`));
+			await new EditorView().closeAllEditors().catch((e) => console.warn(`[WARNING]: Could not close editors - ${e}`));
 		});
 
 		it('Find extension', async function () {
-			this.timeout(10000);
+			this.timeout(15000);
+			await DefaultWait.sleep(5000);
 			wsdl2restExtension = await section.findItem(packageData.displayName);
 			expect(wsdl2restExtension).not.to.be.undefined;
 		});
