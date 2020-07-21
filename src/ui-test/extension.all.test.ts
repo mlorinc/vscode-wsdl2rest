@@ -24,8 +24,11 @@ import * as path from 'path';
 import * as webserver from '../test/app_soap';
 import { projectPath } from './package_data';
 import { VSBrowser } from 'vscode-extension-tester';
+import { AsyncProcess, AsyncCommandProcess, TimeoutPromise } from 'vscode-uitests-tooling';
+import { expect } from 'chai';
 
 describe('All tests', function () {
+	patchProcessExit();
 	installTest.test();
 	marketplaceTest.test();
 
@@ -71,4 +74,42 @@ function* walk(dir: string): Iterable<string> {
 			yield file;
 		}
 	}
+}
+
+function patchProcessExit(): void {
+	const oldExit = AsyncProcess.prototype.exit;
+	AsyncProcess.prototype.exit = async function(force: boolean, ms?: number): Promise<number> {
+		if (process.platform === 'win32') {
+			let killResolve = null;
+
+			const args = [
+				'/F', // force
+				'/T', // kill sub-processes
+				'/PID', // use pid
+				this.process.pid // pid
+			]
+
+			if (!force) {
+				args.shift();
+			}
+
+			const kill = new AsyncCommandProcess('taskkill', args, {
+				shell: true
+			});
+
+			kill.spawn();
+			kill.process.on('error', expect.fail);
+			kill.process.on('exit', (code: number) => killResolve(code))
+
+			const killPromise = new TimeoutPromise((resolve) => killResolve = resolve, ms);
+
+			// wait shell to exit and its sub-processes
+			await killPromise.catch((e: any) => expect.fail(`Could not kill process: ${e}`));
+
+			return Promise.resolve(0);
+		}
+		else {
+			return oldExit.call(this, [force, ms]);
+		}
+	};
 }

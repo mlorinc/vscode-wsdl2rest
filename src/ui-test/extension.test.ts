@@ -31,7 +31,9 @@ import {
 	LogAnalyzer,
 	Maven,
 	OutputViewExt,
-	Project
+	Project,
+	AsyncProcess,
+	AsyncCommandProcess
 } from 'vscode-uitests-tooling';
 import { expect } from 'chai';
 import {
@@ -78,7 +80,7 @@ interface RuntimeOutput {
 const RUNTIME_FOLDER = path.join(projectPath, 'src', 'ui-test', 'runtimes');
 const WSDL_FILE = path.join(projectPath, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
-let currentPort = 8000;
+let currentPort = 8005;
 
 export function test(args: TestArguments) {
 	// temp directory for testing
@@ -267,28 +269,43 @@ export function test(args: TestArguments) {
 		});
 
 		describe('Test generated project', function () {
-			let maven: Maven = null;
-
-			after('Make sure maven is not running', async function () {
-				await maven?.exit(true).catch(() => 1);
-			});
+			let maven: AsyncProcess = null;
+			let analyzer: LogAnalyzer = null;
 
 			it('Installs project', async function () {
 				this.timeout(0);
-				const exitCode = await prepareMavenProject(args, WORKSPACE_PATH);
+				const exitCode = await prepareMavenProject(args, WORKSPACE_PATH).catch(expect.fail);
 				expect(exitCode).to.equal(0);
 			});
 
-			it('Run projects', async function () {
+			it('Runs project', async function () {
 				// camel-maven-plugin must be downloaded
 				this.timeout(350000);
+
 				maven = executeProject(args, WORKSPACE_PATH);
-				const data = await analyzeProject(maven);
+
+				maven.process.on('error', (err: Error) => {
+					expect.fail(`[ERROR] Run project: ${err}`);
+				});
+
+				analyzer = analyzeProject(maven);
+
+
+				const data = await analyzer.wait() as RuntimeOutput;
 				const expectedRoutesCount = getExpectedNumberOfRoutes(args);
 
 				expect(parseInt(data.startedRoutes), "All routes were not started").to.equal(expectedRoutesCount);
 				expect(parseInt(data.totalRoutes), "Number of routes does not match").to.equal(expectedRoutesCount);
 				expect(data.camelVersion, "Camel version mismatch").to.equal(args.camelVersion);
+			});
+
+			it('Stops project', async function () {
+				this.timeout(75000)
+				const exited = await maven?.exit(false, 20000).then(() => true).catch(() => false);
+
+				if (!exited) {
+					await maven?.exit(true, 20000).catch(expect.fail);
+				}
 			});
 		});
 
@@ -369,33 +386,32 @@ async function prepareMavenProject(args: TestArguments, workspacePath: string): 
 	return maven.wait();
 }
 
-function executeProject(args: TestArguments, workspacePath: string): Maven {
-	const maven = new Maven({
+function executeProject(args: TestArguments, workspacePath: string): AsyncProcess {
+	const mavenProcess = new Maven({
 		args: [mavenGoals[args.framework]],
 		properties: {
 			'camel.version': args.camelVersion,
 			'camel.maven.plugin.version': args.camelMavenPluginVersion
 		},
 		cwd: workspacePath,
-		timeout: 350000,
-		shell: true
+		timeout: 345000,
+		// run maven in shell environment on Windows
+		shell: process.platform === 'win32'
 	});
-	maven.spawn();
-	maven.stdoutLineReader.on('line', console.log);
-	return maven;
+
+	mavenProcess.spawn();
+	mavenProcess.stdoutLineReader.on('line', console.log);
+	return mavenProcess;
 }
 
-async function analyzeProject(maven: Maven): Promise<RuntimeOutput> {
+function analyzeProject(maven: AsyncProcess): LogAnalyzer {
 	const analyzer = new LogAnalyzer(maven.stdoutLineReader);
-
 	analyzer.whenMatchesThenCaptureData(/.*Total (?<totalRoutes>\d+) routes, of which (?<startedRoutes>\d+) are started/);
 	analyzer.whenMatchesThenCaptureData(
 		/.*Apache Camel (?<camelVersion>\d+\.\d+\.\d+(|\.[a-zA-Z0-9-_]+)) \(CamelContext: .+\) started in.*/
 	);
 	analyzer.startOrderedParsing();
-
-	const analyzerResult = await analyzer.wait() as RuntimeOutput;
-	return analyzerResult;
+	return analyzer;
 }
 
 function getExpectedNumberOfRoutes(args: TestArguments): number {
