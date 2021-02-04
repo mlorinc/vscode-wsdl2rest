@@ -15,8 +15,7 @@
  * limitations under the License.
  */
 
-import * as fs from 'fs';
-import * as fsExtra from 'fs-extra';
+import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as webServer from '../test/app_soap';
 import {
@@ -27,21 +26,23 @@ import {
 } from './package_data';
 import {
 	DefaultWait,
-	Dialog,
+	Input,
 	LogAnalyzer,
 	Maven,
 	Menu,
 	OpenMethod,
 	OutputViewExt,
-	Project
+	Project,
+	WebElementConditions
 } from 'vscode-uitests-tooling';
 import { expect } from 'chai';
 import {
 	InputBox,
 	NotificationsCenter,
 	NotificationType,
+	TitleBar,
+	until,
 	VSBrowser,
-	WebDriver,
 	Workbench
 } from 'vscode-extension-tester';
 
@@ -76,6 +77,13 @@ interface RuntimeOutput {
 	camelVersion: string;
 }
 
+interface InputOptions {
+	message?: (message: string) => boolean;
+	placeholder?: (placeholder: string) => boolean;
+	text?: (text: string) => boolean;
+	timeout?: number;
+}
+
 const RUNTIME_FOLDER = path.join(projectPath, 'src', 'ui-test', 'runtimes');
 const WSDL_FILE = path.join(projectPath, 'src', 'test', 'address.wsdl');
 const WSDL_URL = webServer.getWSDLURL();
@@ -87,25 +95,22 @@ export function test(args: TestArguments) {
 	// set of expected files from wsdl2rest process
 	const expectedFiles = new Set(getExpectedFileList(args).map(f => path.join(WORKSPACE_PATH, f)));
 
-	describe(`Extension test[${detailsString(args)}]`, function () {
+	describe(`Extension test(${detailsString(args)})`, function () {
 		let browser: VSBrowser;
-		let driver: WebDriver;
 		let workspace: Project;
 		let packageData: PackageData = getPackageData();
+		const command: Command = findCommand(args, packageData);
 
 		if (args.camelMavenPluginVersion == null) {
 			args.camelMavenPluginVersion = args.camelVersion;
 		}
 
 		before('Project setup', async function () {
-			this.timeout(8000)
 			browser = VSBrowser.instance;
-			driver = browser.driver;
-
-			workspace = await prepareWorkspace();
+			workspace = await prepareWorkspace(this.timeout());
 
 			// copy runtime project to temp testing folder, so we can start test scenario
-			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
+			fs.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
 
 			// ensure expected files do not exist yet
 			Array.from(expectedFiles).forEach(file => {
@@ -115,44 +120,55 @@ export function test(args: TestArguments) {
 		});
 
 		after('Project cleanup', async function () {
-			await clearWorkspace(workspace);
-			// remove all files from temp directory
-			for (const f of fs.readdirSync(WORKSPACE_PATH)) {
-				fsExtra.removeSync(path.join(WORKSPACE_PATH, f));
-			}
-			await browser.waitForWorkbench();
+			await clearWorkspace(workspace, this.timeout());
 		});
 
-		const command: Command = findCommand(args, packageData);
+		it('Open command palette', async function() {
+			this.retries(3);
+			await new TitleBar().select('View', 'Command Palette...');
+			const input = await getInput({
+				text: (text) => text === '>',
+				timeout: this.timeout() - 2000
+			});
 
-		it(`Execute command: ${command.command}`, async function () {
-			this.timeout(6000);
-			await new Workbench().executeCommand(command.title);
+			await input.setText(`>${command.title}`);
+			await input.confirm();
 		});
 
-		it(`Open wsdl file [${args.type}]`, async function () {
-			this.timeout(20000);
+		it(`Open wsdl file - ${args.type}`, async function () {
+			let file = '';
+			let input: InputBox;
 			switch (args.type) {
 				case 'url':
-					const input = await getInput();
-
+					input = await getInput({
+						placeholder: (text) => text === 'Provide the URL for the WSDL file',
+						timeout: this.timeout() - 2000
+					});
 					expect(await input.getPlaceHolder()).to.be.equal('Provide the URL for the WSDL file');
 					expect(await input.getMessage()).to.be.equal('WSDL URL (Press \'Enter\' to confirm or \'Escape\' to cancel)');
-
-					await input.setText(WSDL_URL);
-					await input.confirm();
+					file = WSDL_URL;
 					break;
 				case 'file':
-					await Dialog.confirm(WSDL_FILE);
+					const defaultText = WORKSPACE_PATH.endsWith(path.sep) ? WORKSPACE_PATH : WORKSPACE_PATH + path.sep;
+					input = await getInput({
+						text: (text) => text === defaultText,
+						timeout: this.timeout() - 2000
+					});
+					file = WSDL_FILE;
 					break;
 				default:
 					expect.fail('Unsupported option');
 					return null;
 			}
+			await input.setText(file);
+			await input.confirm();
 		});
 
-		it(`Select '${args.framework}' option`, async function () {
-			const input = await getInput();
+		it(`Select -- ${args.framework} -- option`, async function () {
+			const input = await getInput({
+				placeholder: (text) => text === 'Specify which DSL to generate the Camel configuration for',
+				timeout: this.timeout() - 2000
+			});
 
 			expect(await input.getPlaceHolder()).to.be.equal('Specify which DSL to generate the Camel configuration for');
 			expect(await getQuickPicks(input)).to.be.deep.equal(['Spring', 'Blueprint']);
@@ -162,7 +178,10 @@ export function test(args: TestArguments) {
 		});
 
 		it(`Confirm output directory`, async function () {
-			const input = await getInput();
+			const input = await getInput({
+				placeholder: (text) => text === 'Enter the output directory for generated artifacts',
+				timeout: this.timeout() - 2000
+			});
 
 			expect(await input.getPlaceHolder()).to.be.equal('Enter the output directory for generated artifacts');
 			expect(await input.getMessage()).to.be.equal('Output Directory (Press \'Enter\' to confirm or \'Escape\' to cancel)');
@@ -172,7 +191,10 @@ export function test(args: TestArguments) {
 		});
 
 		it('Confirm JAX-WS endpoint', async function () {
-			const input = await getInput();
+			const input = await getInput({
+				placeholder: (text) => text.includes('Enter the address for the running jaxws endpoint'),
+				timeout: this.timeout() - 2000
+			});
 
 			expect(await input.getPlaceHolder()).to.be.equal('Enter the address for the running jaxws endpoint (defaults to http://localhost:8080/somepath)');
 			expect(await input.getMessage()).to.be.equal('JAXWS Endpoint (Press \'Enter\' to confirm or \'Escape\' to cancel)');
@@ -181,7 +203,9 @@ export function test(args: TestArguments) {
 		});
 
 		it('Confirm JAX-RS endpoint', async function () {
-			const input = await getInput();
+			const input = await getInput({
+				placeholder: (text) => text.includes('Enter the address for the jaxrs endpoint')
+			});
 
 
 			expect(await input.getPlaceHolder()).to.be.equal('Enter the address for the jaxrs endpoint (defaults to http://localhost:8081/jaxrs)');
@@ -192,7 +216,6 @@ export function test(args: TestArguments) {
 		});
 
 		it('Convert wsdl project', async function () {
-			this.timeout(15000);
 			const resultRegex = /Process finished\. Return code (?<code>\d+)\./;
 
 			const output = await OutputViewExt.open();
@@ -222,17 +245,26 @@ export function test(args: TestArguments) {
 		describe('Generated all files', function () {
 			let notificationCenter: NotificationsCenter;
 
-			before('Open notification center', async function() {
+			before('Open notification center', async function () {
+				this.retries(10);
 				notificationCenter = await new Workbench().openNotificationsCenter();
+				await browser.driver.wait(async () => await WebElementConditions.isInteractive(notificationCenter), this.timeout());
 			});
 
 			after('Close notification center', async function () {
-				await notificationCenter.close();
+				this.retries(10);
+				if (notificationCenter) {
+					await notificationCenter.close();
+					await browser.driver.wait(
+						async () => await WebElementConditions.isHidden(notificationCenter) ||
+							await until.stalenessOf(notificationCenter).fn(browser.driver),
+						this.timeout());
+				}
 			});
 
 			it('Show notifications', async function () {
 				this.retries(10);
-		
+
 				const notifications = await notificationCenter.getNotifications(NotificationType.Any);
 				const errors: string[] = [];
 
@@ -316,17 +348,17 @@ function detailsString(args: TestArguments): string {
 
 	switch (args.type) {
 		case 'url':
-			segments.push(`url = ${WSDL_URL}`);
+			segments.push(`url(${WSDL_URL})`);
 			break;
 		case 'file':
-			segments.push(`file = ${WSDL_FILE}`);
+			segments.push(`file(${WSDL_FILE})`);
 			break;
 		default:
 			expect.fail('Unsupported option');
 			return null;
 	}
 	segments.push(args.framework);
-	segments.push(`camel = ${args.camelVersion}`);
+	segments.push(`camel(${args.camelVersion})`);
 	return segments.join(', ');
 }
 
@@ -390,9 +422,9 @@ function getExpectedNumberOfRoutes(args: TestArguments): number {
 function getCamelContextPath(args: TestArguments): string {
 	switch (args.framework) {
 		case 'spring':
-			return 'src/main/resources/META-INF/spring/camel-context.xml';
+			return path.join('.', 'src', 'main', 'resources', 'META-INF', 'spring', 'camel-context.xml');
 		case 'blueprint':
-			return 'src/main/resources/OSGI-INF/blueprint/blueprint.xml';
+			return path.join('.', 'src', 'main', 'resources', 'OSGI-INF', 'blueprint', 'blueprint.xml');
 		default:
 			expect.fail('Unsupported option');
 			return null;
@@ -407,44 +439,62 @@ function getExpectedFileList(args: TestArguments): string[] {
 	];
 
 	let sourceRoot: string;
+	let fileList: string[];
 	switch (args.type) {
 		case 'file':
-			sourceRoot = '/src/main/java/org/jboss/fuse/wsdl2rest/test/doclit';
-			files.push(
-				`${sourceRoot}/AddAddress.java`,
-				`${sourceRoot}/AddAddressResponse.java`,
-				`${sourceRoot}/Address.java`,
-				`${sourceRoot}/AddressService.java`,
-				`${sourceRoot}/DelAddress.java`,
-				`${sourceRoot}/DelAddressResponse.java`,
-				`${sourceRoot}/GetAddress.java`,
-				`${sourceRoot}/GetAddressResponse.java`,
-				`${sourceRoot}/Item.java`,
-				`${sourceRoot}/ListAddresses.java`,
-				`${sourceRoot}/ListAddressesResponse.java`,
-				`${sourceRoot}/ObjectFactory.java`,
-				`${sourceRoot}/package-info.java`,
-				`${sourceRoot}/UpdAddress.java`,
-				`${sourceRoot}/UpdAddressResponse.java`,
-			);
+			sourceRoot = path.join('.', 'src', 'main', 'java', 'org', 'jboss', 'fuse', 'wsdl2rest', 'test', 'doclit')
+			fileList = [
+				`AddAddress.java`,
+				`AddAddressResponse.java`,
+				`Address.java`,
+				`AddressService.java`,
+				`DelAddress.java`,
+				`DelAddressResponse.java`,
+				`GetAddress.java`,
+				`GetAddressResponse.java`,
+				`Item.java`,
+				`ListAddresses.java`,
+				`ListAddressesResponse.java`,
+				`ObjectFactory.java`,
+				`package-info.java`,
+				`UpdAddress.java`,
+				`UpdAddressResponse.java`,
+			];
 			break;
 		case 'url':
-			sourceRoot = 'src/main/java/org/helloworld/test/rpclit';
-			files.push(
-				`${sourceRoot}/HelloPortType.java`,
-				`${sourceRoot}/HelloService.java`,
-			);
+			sourceRoot = path.join('.', 'src', 'main', 'java', 'org', 'helloworld', 'test', 'rpclit')
+			fileList = [
+				`HelloPortType.java`,
+				`HelloService.java`,
+			];
 			break;
 		default:
 			expect.fail('Unsupported option');
 			return null;
 	}
+	files.push(...fileList.map((file) => path.join(sourceRoot, file)));
 	return files;
 }
 
-async function getInput(): Promise<InputBox> {
-	return InputBox.create();
-} 
+async function getInput(options?: InputOptions): Promise<InputBox> {
+	const input = new Input();
+
+	await input.getDriver().wait(async function () {
+		try {
+			const active = await input.isDisplayed() && await input.isEnabled();
+			const placeholder = options?.placeholder ? options.placeholder(await input.getPlaceHolder()) : true;
+			const message = options?.message ? options.message(await input.getMessage()) : true;
+			const text = options?.text ? options.text(await input.getText()) : true;
+
+			return active && placeholder && message && text;
+		}
+		catch {
+			return false;
+		}
+	}, options?.timeout, `Input(text="${await input.getText()}", placeholder="${await input.getPlaceHolder()}", message="${await input.getMessage()}", active="${await input.isDisplayed() && await input.isEnabled()}")`);
+
+	return input;
+}
 
 async function getQuickPicks(input: InputBox) {
 	const quickPicks = await input.getQuickPicks();
@@ -454,7 +504,7 @@ async function getQuickPicks(input: InputBox) {
 /**
  * Creates new project and opens it in vscode
  */
-async function prepareWorkspace(): Promise<Project> {
+async function prepareWorkspace(timeout: number): Promise<Project> {
 	Menu.defaultOpenMethod = OpenMethod.INPUT;
 
 	const project = new Project(WORKSPACE_PATH);
@@ -463,8 +513,8 @@ async function prepareWorkspace(): Promise<Project> {
 		await project.delete();
 	}
 
-	project.create();
-	await project.open();
+	await project.create();	
+	await project.open(timeout);
 	return project;
 }
 
@@ -472,7 +522,7 @@ async function prepareWorkspace(): Promise<Project> {
  * Closes and deletes project
  * @param workspace project object returned from `prepareWorkspace` function
  */
-async function clearWorkspace(workspace: Project): Promise<void> {
-	await workspace.close();
+async function clearWorkspace(workspace: Project, timeout: number): Promise<void> {
+	await workspace.close(timeout);
 	await workspace.delete();
 }

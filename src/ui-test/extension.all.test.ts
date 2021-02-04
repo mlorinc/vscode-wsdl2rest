@@ -18,23 +18,49 @@
 import * as assert from 'assert';
 import * as extensionTest from './extension.test';
 import * as fs from 'fs';
-import * as installTest from './install.test';
-import * as marketplaceTest from './marketplace.test';
 import * as path from 'path';
 import * as webserver from '../test/app_soap';
-import { projectPath } from './package_data';
+import { projectPath, getPackageData } from './package_data';
 import { VSBrowser } from 'vscode-extension-tester';
+import { installTest, stageTest } from 'vscode-uitests-tooling';
 
 describe('All tests', function () {
-	installTest.test();
-	marketplaceTest.test();
+
+	before(async function() {
+		await VSBrowser.instance.driver.manage().timeouts().implicitlyWait(5000);
+	});
+
+	installTest({
+		displayName: 'wsdl2rest by Red Hat',
+		testTitle: 'Install test',
+		timeouts: {
+			findExtension: 30000,
+			installExtension: 100000,
+			marketplaceClose: 30000,
+			marketplaceOpen: 30000,
+			verifyInstalled: 30000
+		}
+	});
+
+	stageTest({
+		publisher: 'Red Hat',
+		commands: getPackageData().contributes.commands.map((command) => command.title),
+		displayName: 'wsdl2rest by Red Hat',
+		testTitle: 'Stage test',
+		timeouts: {
+			commandTests: 30000,
+			findExtension: 30000,
+			marketplaceClose: 30000,
+			marketplaceOpen: 30000,
+			verifications: 30000
+		}
+	});
 
 	describe('Extension tests', function () {
-		this.timeout(4000);
+		this.timeout(60000);
 		let browser: VSBrowser;
 
 		before('Setup environment', async function () {
-			this.timeout(32000);
 			browser = VSBrowser.instance;
 			webserver.startWebService();
 		});
