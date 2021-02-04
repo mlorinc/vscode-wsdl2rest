@@ -61,7 +61,7 @@ export function test() {
 		});
 
 		it('Installs extension', async function () {
-			this.timeout(40000);
+			this.timeout(200000);
 			await wsdl2restExtension.install().catch((e) => expect.fail('Could not install extension: ' + e));
 			expect(await wsdl2restExtension.isInstalled()).to.be.true;
 		});

@@ -89,7 +89,7 @@
         "vscode-extension-tester": "^3.2.5",
         "vscode-extension-tester-native": "^3.0.2",
         "vscode-test": "^1.5.0",
-        "vscode-uitests-tooling": "^2.0.1"
+        "vscode-uitests-tooling": "file:../vscode-uitests-tooling/vscode-uitests-tooling-2.1.0.tgz"
     },
     "dependencies": {
         "child_process": "^1.0.2",

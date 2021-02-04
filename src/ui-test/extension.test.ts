@@ -26,13 +26,14 @@ import {
 	projectPath
 } from './package_data';
 import {
-	CommandPalette,
 	DefaultWait,
 	Dialog,
-	Input,
 	LogAnalyzer,
 	Maven,
-	OutputViewExt
+	Menu,
+	OpenMethod,
+	OutputViewExt,
+	Project
 } from 'vscode-uitests-tooling';
 import { expect } from 'chai';
 import {
@@ -89,6 +90,7 @@ export function test(args: TestArguments) {
 	describe(`Extension test[${detailsString(args)}]`, function () {
 		let browser: VSBrowser;
 		let driver: WebDriver;
+		let workspace: Project;
 		let packageData: PackageData = getPackageData();
 
 		if (args.camelMavenPluginVersion == null) {
@@ -100,6 +102,8 @@ export function test(args: TestArguments) {
 			browser = VSBrowser.instance;
 			driver = browser.driver;
 
+			workspace = await prepareWorkspace();
+
 			// copy runtime project to temp testing folder, so we can start test scenario
 			fsExtra.copySync(path.join(RUNTIME_FOLDER, args.framework), WORKSPACE_PATH);
 
@@ -107,13 +111,16 @@ export function test(args: TestArguments) {
 			Array.from(expectedFiles).forEach(file => {
 				expect(fs.existsSync(file), `File ${file} should not exist`).to.be.false;
 			});
+			await browser.waitForWorkbench();
 		});
 
 		after('Project cleanup', async function () {
+			await clearWorkspace(workspace);
 			// remove all files from temp directory
 			for (const f of fs.readdirSync(WORKSPACE_PATH)) {
 				fsExtra.removeSync(path.join(WORKSPACE_PATH, f));
 			}
+			await browser.waitForWorkbench();
 		});
 
 		const command: Command = findCommand(args, packageData);
@@ -442,4 +449,30 @@ async function getInput(): Promise<InputBox> {
 async function getQuickPicks(input: InputBox) {
 	const quickPicks = await input.getQuickPicks();
 	return Promise.all(quickPicks.map(async (q) => await q.getText()));
+}
+
+/**
+ * Creates new project and opens it in vscode
+ */
+async function prepareWorkspace(): Promise<Project> {
+	Menu.defaultOpenMethod = OpenMethod.INPUT;
+
+	const project = new Project(WORKSPACE_PATH);
+
+	if (project.exists) {
+		await project.delete();
+	}
+
+	project.create();
+	await project.open();
+	return project;
+}
+
+/**
+ * Closes and deletes project
+ * @param workspace project object returned from `prepareWorkspace` function
+ */
+async function clearWorkspace(workspace: Project): Promise<void> {
+	await workspace.close();
+	await workspace.delete();
 }
